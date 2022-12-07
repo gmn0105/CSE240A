@@ -37,6 +37,10 @@ int verbose;
 //TODO: Add your own Branch Predictor data structures here
 //
 
+uint32_t g_history;
+uint32_t gshare_pht_size;
+uint32_t *gshare_pht;
+
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -50,6 +54,16 @@ init_predictor()
   //
   //TODO: Initialize Branch Predictor Data Structures
   //
+  switch (bpType)
+  {
+    case STATIC:
+      break;
+    case GSHARE:
+      init_gshare();
+      break;
+    default:
+      break;
+  }
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -68,6 +82,7 @@ make_prediction(uint32_t pc)
     case STATIC:
       return TAKEN;
     case GSHARE:
+      return make_prediction_gshare(pc);
     case TOURNAMENT:
     case CUSTOM:
     default:
@@ -88,4 +103,73 @@ train_predictor(uint32_t pc, uint8_t outcome)
   //
   //TODO: Implement Predictor training
   //
+  switch (bpType)
+  {
+  case STATIC:
+    break;
+  case GSHARE:
+    train_predictor_gshare(pc, outcome);
+    break;
+  default:
+    break;
+  }
+}
+
+void 
+init_gshare() 
+{   
+    gshare_pht_size = 1 << ghistoryBits;
+    gshare_pht = (uint32_t*) malloc(sizeof(uint32_t)*gshare_pht_size);
+    g_history = 0;
+    memset(gshare_pht, 1, gshare_pht_size*sizeof(uint32_t));
+}
+
+uint8_t
+make_prediction_gshare(uint32_t pc)
+{
+    uint32_t history_bits = g_history & (gshare_pht_size - 1);
+    uint32_t pc_bits = pc & (gshare_pht_size - 1);
+    uint32_t pht_index = history_bits ^ pc_bits;
+    
+    if (gshare_pht[pht_index] == 0)
+    {
+        return NOTTAKEN;
+    } 
+    else if (gshare_pht[pht_index] == 1) 
+    {
+        return NOTTAKEN;
+    }
+    else if (gshare_pht[pht_index] == 2) 
+    {
+        return TAKEN;
+    }
+    else
+    {
+      return TAKEN;
+    }
+}
+
+void 
+train_predictor_gshare(uint32_t pc, uint8_t outcome)
+{
+    uint32_t history_bits = g_history & (gshare_pht_size - 1);
+    uint32_t pc_bits = pc & (gshare_pht_size - 1);
+    uint32_t pht_index = history_bits ^ pc_bits;
+
+    if (outcome == TAKEN)
+    {
+        if (gshare_pht[pht_index] < 3)
+        {
+            gshare_pht[pht_index] = gshare_pht[pht_index] + 1;
+        }
+    } 
+    else
+    {
+        if (gshare_pht[pht_index] > 0)
+        {
+            gshare_pht[pht_index] = gshare_pht[pht_index] - 1;
+        }
+    }
+
+    g_history = (g_history << 1) | outcome;
 }
